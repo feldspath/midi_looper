@@ -1,0 +1,11 @@
+[package]
+name = "midi_looper"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+itertools = "0.14.0"
+midir = "0.10.3"
+mseq = "2.1.0"
+promptly = "0.3.1"
+thiserror = "2.0.18"
