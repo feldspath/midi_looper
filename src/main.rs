@@ -51,7 +51,7 @@ impl Looper {
     }
     fn remove_first_session(&mut self) {
         let idx = (self.current_midi_channel - 1) as usize;
-        if self.sessions[idx].len() > 0 {
+        if !self.sessions[idx].is_empty() {
             self.sessions[idx].remove(0);
         }
     }
@@ -102,10 +102,8 @@ impl mseq::Conductor for Looper {
         instructions.extend(
             self.sessions
                 .iter()
-                .map(|midi_session| midi_session.iter())
-                .flatten()
-                .map(|sess| sess.instructions_this_step(step))
-                .flatten(),
+                .flat_map(|midi_session| midi_session.iter())
+                .flat_map(|sess| sess.instructions_this_step(step)),
         );
 
         instructions

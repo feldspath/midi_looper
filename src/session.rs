@@ -73,10 +73,6 @@ impl Session {
         self.finalized = true;
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.instructions.is_empty()
-    }
-
     pub fn clear(&mut self) {
         self.instructions.clear();
         self.finalized = false;
