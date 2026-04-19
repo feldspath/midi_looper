@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+env_logger = "0.11.10"
 itertools = "0.14.0"
+log = "0.4.29"
 midir = "0.10.3"
 mseq = "2.1.0"
 promptly = "0.3.1"
