@@ -2,6 +2,7 @@ mod session;
 use self::session::*;
 
 use std::fmt::Display;
+use std::io::Write;
 
 use log::{debug, info};
 use mseq::{Instruction, MSeqError, MidiInParam, MidiMessage};
@@ -16,6 +17,8 @@ struct Looper {
     start_step: u32,
     current_midi_channel: u8,
     running: bool,
+    stop_requested: bool,
+    bpm: u8,
 }
 
 impl Looper {
@@ -27,6 +30,8 @@ impl Looper {
             start_step: 0,
             current_midi_channel: 1,
             running: true,
+            stop_requested: false,
+            bpm: 120,
         }
     }
 
@@ -79,7 +84,11 @@ impl Display for Looper {
                 self.current_midi_channel
             )
         } else {
-            write!(f, "current midi channel: {}", self.current_midi_channel)
+            write!(
+                f,
+                "[{}] current midi channel: {}",
+                self.bpm, self.current_midi_channel
+            )
         }
     }
 }
@@ -94,8 +103,14 @@ impl mseq::Conductor for Looper {
         if !self.running {
             context.quit();
         }
+        context.set_bpm(self.bpm);
 
         let step = context.get_step();
+
+        if step % (24 * 4) == 0 {
+            self.stop_requested = false;
+        }
+
         let mut instructions = vec![];
 
         // play all instructions that play this step
@@ -137,42 +152,53 @@ impl mseq::Conductor for Looper {
                 controller,
                 value,
             } => {
-                // pop
-                if channel == INPUT_MIDI_CHANNEL && controller == 16 && value > 0 {
-                    debug!("pop last session");
-                    self.pop_last_session();
-                }
+                if value > 0 {
+                    // pop
+                    if channel == INPUT_MIDI_CHANNEL && controller == 16 {
+                        debug!("pop last session");
+                        self.pop_last_session();
+                    }
 
-                // remove first
-                if channel == INPUT_MIDI_CHANNEL && controller == 20 && value > 0 {
-                    debug!("remove first session");
-                    self.remove_first_session();
-                }
+                    // remove first
+                    if channel == INPUT_MIDI_CHANNEL && controller == 20 {
+                        debug!("remove first session");
+                        self.remove_first_session();
+                    }
 
-                // recording
-                if channel == INPUT_MIDI_CHANNEL && controller == 17 && value > 0 {
-                    debug!("toggle recording");
-                    self.toggle_recording(step);
-                }
+                    // recording
+                    if channel == INPUT_MIDI_CHANNEL && controller == 17 {
+                        debug!("toggle recording");
+                        self.toggle_recording(step);
+                    }
 
-                // midi channel down
-                if !self.record && channel == INPUT_MIDI_CHANNEL && controller == 19 && value > 0 {
-                    debug!("midi channel down");
-                    self.midi_channel_down();
-                }
-                // midi channel up
-                if !self.record && channel == INPUT_MIDI_CHANNEL && controller == 23 && value > 0 {
-                    debug!("midi channel up");
-                    self.midi_channel_up();
-                }
+                    // midi channel down
+                    if !self.record && channel == INPUT_MIDI_CHANNEL && controller == 19 {
+                        debug!("midi channel down");
+                        self.midi_channel_down();
+                    }
+                    // midi channel up
+                    if !self.record && channel == INPUT_MIDI_CHANNEL && controller == 23 {
+                        debug!("midi channel up");
+                        self.midi_channel_up();
+                    }
 
-                // stop program
-                if channel == INPUT_MIDI_CHANNEL && controller == 22 && value > 0 {
-                    debug!("stop program");
-                    self.running = false;
-                }
+                    // stop program
+                    if channel == INPUT_MIDI_CHANNEL && controller == 22 {
+                        debug!("stop program");
+                        if self.stop_requested {
+                            self.running = false;
+                        } else {
+                            self.stop_requested = true;
+                        }
+                    }
 
-                self.update_info();
+                    // set bpm
+                    if channel == 1 && controller == 70 {
+                        self.bpm = 50 + value;
+                    }
+
+                    self.update_info();
+                }
             }
             _ => {}
         }
@@ -193,6 +219,19 @@ pub enum MainError {
 }
 
 fn main() -> Result<(), MainError> {
+    env_logger::Builder::from_default_env()
+        .format(|buf, record| {
+            let level_style = buf.default_level_style(record.level());
+
+            writeln!(
+                buf,
+                "[{level_style}{}{level_style:#}] {}",
+                record.level(),
+                record.args()
+            )
+        })
+        .init();
+
     let looper = Looper::new();
     let midi_in_params = MidiInParam {
         ignore: mseq::Ignore::None,
@@ -200,7 +239,6 @@ fn main() -> Result<(), MainError> {
         slave: false,
     };
 
-    env_logger::init();
     mseq::run(looper, None, Some(midi_in_params))?;
 
     Ok(())

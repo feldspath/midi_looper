@@ -65,7 +65,7 @@ impl Session {
         self.instructions.iter_mut().for_each(|(s, _)| {
             let t = *s as i32 - (start_bar_num * BAR_LENGTH) as i32;
             *s = (t + if t < 0 {
-                (start_bar_num * BAR_LENGTH) as i32
+                (self.length_in_bars * BAR_LENGTH) as i32
             } else {
                 0
             }) as u32;
